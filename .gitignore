@@ -1,0 +1,52 @@
+# -------------------------
+# Python & FastAPI backend
+# -------------------------
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example   # keep example env (safe)
+
+# SQLite / local DB files (if used)
+*.db
+*.sqlite3
+
+# Logs
+*.log
+
+# Cache
+.cache/
+*.cache
+pip-log.txt
+
+# MyPy / Pyright / Pylance
+.mypy_cache/
+.dmypy.json
+.pytype/
+.pyright/
+
+# IDE junk
+.vscode/
+.idea/
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Uvicorn / FastAPI auto-generated
+*.pid
+
+# Build outputs
+dist/
+build/
