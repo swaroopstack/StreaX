@@ -68,3 +68,36 @@ def update_user_after_event(db: Session, user: ORMUser, event: dict):
     db.commit()
     db.refresh(user)
     return user
+
+# -------------------------
+# New listing helpers
+# -------------------------
+def list_tasks_for_user(db: Session, user_id: int, limit: int = 100, offset: int = 0):
+    q = db.query(ORMTask).filter(ORMTask.user_id == user_id).order_by(ORMTask.id.asc()).limit(limit).offset(offset)
+    return q.all()
+
+def list_logs_for_user(db: Session, user_id: int, limit: int = 100, offset: int = 0):
+    q = db.query(TaskLog).filter(TaskLog.user_id == user_id).order_by(TaskLog.id.desc()).limit(limit).offset(offset)
+    return q.all()
+
+def get_user_stats(db: Session, user_id: int):
+    """
+    Return a simple stats dict: total_xp, current_level, streak_days, last_active_date, xp_to_next_level
+    xp_to_next_level uses simple formula: next_level_threshold = (current_level + 1) * 100
+    """
+    u = db.get(ORMUser, user_id)
+    if not u:
+        return None
+    next_threshold = (u.current_level + 1) * 100
+    xp_to_next = max(0, next_threshold - u.total_xp)
+    return {
+        "id": u.id,
+        "username": u.username,
+        "total_xp": u.total_xp,
+        "current_level": u.current_level,
+        "streak_days": u.streak_days,
+        "last_active_date": u.last_active_date,
+        "consecutive_misses": u.consecutive_misses,
+        "xp_to_next_level": xp_to_next,
+        "next_level_threshold": next_threshold
+    }

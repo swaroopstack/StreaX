@@ -1,7 +1,7 @@
 # backend/app/main.py
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Query
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from streax.models import Task as DataTask, UserState as DataUserState
 from streax.engine import process_day
 from datetime import date
@@ -31,8 +31,8 @@ class TaskIn(BaseModel):
     required_daily: bool = False
 
 class UserStateIn(BaseModel):
-    user_id: int | None = None
-    username: str | None = None
+    user_id: Optional[int] = None
+    username: Optional[str] = None
     total_xp: int = 0
     current_level: int = 0
     streak_days: int = 0
@@ -58,10 +58,20 @@ def api_create_user(payload: UserStateIn, db = Depends(get_db)):
     if payload.user_id:
         u = crud.get_user(db, payload.user_id)
         if u:
-            return {"user": u}
+            return {"user": {
+                "id": u.id,
+                "username": u.username,
+                "total_xp": u.total_xp,
+                "current_level": u.current_level
+            }}
     # attempt to create user
     u = crud.create_user(db, username, user_id=payload.user_id)
-    return {"user": u}
+    return {"user": {
+        "id": u.id,
+        "username": u.username,
+        "total_xp": u.total_xp,
+        "current_level": u.current_level
+    }}
 
 @app.get("/users/{user_id}", summary="Get user by id")
 def api_get_user(user_id: int, db = Depends(get_db)):
@@ -78,6 +88,47 @@ def api_get_user(user_id: int, db = Depends(get_db)):
         "last_active_date": u.last_active_date,
         "consecutive_misses": u.consecutive_misses,
     }
+
+@app.get("/tasks", summary="List tasks for a user")
+def api_list_tasks(user_id: int = Query(..., description="user id"), limit: int = 100, offset: int = 0, db = Depends(get_db)):
+    tasks = crud.list_tasks_for_user(db, user_id=user_id, limit=limit, offset=offset)
+    # convert to simple dicts
+    result = []
+    for t in tasks:
+        result.append({
+            "id": t.id,
+            "user_id": t.user_id,
+            "name": t.name,
+            "type": t.type,
+            "base_xp": t.base_xp,
+            "required_daily": bool(t.required_daily),
+            "created_at": t.created_at.isoformat() if t.created_at else None
+        })
+    return {"tasks": result, "count": len(result)}
+
+@app.get("/task-logs", summary="List task logs for a user")
+def api_list_logs(user_id: int = Query(..., description="user id"), limit: int = 100, offset: int = 0, db = Depends(get_db)):
+    logs = crud.list_logs_for_user(db, user_id=user_id, limit=limit, offset=offset)
+    out = []
+    for l in logs:
+        out.append({
+            "id": l.id,
+            "task_id": l.task_id,
+            "user_id": l.user_id,
+            "date": l.date,
+            "xp_awarded": l.xp_awarded,
+            "streak_at_time": l.streak_at_time,
+            "is_full_day": bool(l.is_full_day),
+            "created_at": l.created_at.isoformat() if l.created_at else None
+        })
+    return {"logs": out, "count": len(out)}
+
+@app.get("/users/{user_id}/stats", summary="Get simple stats for a user")
+def api_user_stats(user_id: int, db = Depends(get_db)):
+    stats = crud.get_user_stats(db, user_id)
+    if not stats:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"stats": stats}
 
 @app.post("/process-day", summary="Process day, persist logs and update user")
 def api_process_day(user: UserStateIn, tasks: List[TaskIn], db = Depends(get_db)):
@@ -126,7 +177,6 @@ def api_process_day(user: UserStateIn, tasks: List[TaskIn], db = Depends(get_db)
     crud.create_task_logs(db, orm_user.id, task_awards)
 
     # Update user row with engine results
-    # event dict already has total_xp and current_level etc.
     orm_user = crud.update_user_after_event(db, orm_user, {
         "total_xp": updated_user_state.total_xp,
         "current_level": updated_user_state.current_level,
