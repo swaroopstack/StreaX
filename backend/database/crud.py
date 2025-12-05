@@ -101,3 +101,36 @@ def get_user_stats(db: Session, user_id: int):
         "xp_to_next_level": xp_to_next,
         "next_level_threshold": next_threshold
     }
+
+# -------------------------
+# Task CRUD helpers
+# -------------------------
+def get_task(db: Session, task_id: int):
+    return db.get(ORMTask, task_id)
+
+def create_task(db: Session, user_id: int, name: str, type_: str, base_xp: int, required_daily: bool = False):
+    t = ORMTask(user_id=user_id, name=name, type=type_, base_xp=base_xp, required_daily=required_daily)
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    return t
+
+def update_task(db: Session, task_id: int, **fields):
+    t = db.get(ORMTask, task_id)
+    if not t:
+        return None
+    for k, v in fields.items():
+        if hasattr(t, k):
+            setattr(t, k, v)
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    return t
+
+def delete_task(db: Session, task_id: int):
+    t = db.get(ORMTask, task_id)
+    if not t:
+        return False
+    db.delete(t)
+    db.commit()
+    return True
