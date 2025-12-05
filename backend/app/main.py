@@ -1,4 +1,12 @@
 # backend/app/main.py
+import sys
+from pathlib import Path
+
+# Ensure backend folder is on sys.path so imports resolve when running from backend/
+here = Path(__file__).resolve().parents[1]
+if str(here) not in sys.path:
+    sys.path.insert(0, str(here))
+
 from fastapi import FastAPI, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional
@@ -39,6 +47,10 @@ class UserStateIn(BaseModel):
     last_active_date: str = ""
     consecutive_misses: int = 0
 
+class ProcessDayRequest(BaseModel):
+    user: UserStateIn
+    tasks: List[TaskIn]
+
 # DB dependency
 def get_db():
     db = SessionLocal()
@@ -54,7 +66,6 @@ def root():
 @app.post("/users", summary="Create a user (if username provided)")
 def api_create_user(payload: UserStateIn, db = Depends(get_db)):
     username = payload.username or f"user_{payload.user_id or 'anon'}"
-    # if user_id supplied and exists, return it
     if payload.user_id:
         u = crud.get_user(db, payload.user_id)
         if u:
@@ -64,7 +75,6 @@ def api_create_user(payload: UserStateIn, db = Depends(get_db)):
                 "total_xp": u.total_xp,
                 "current_level": u.current_level
             }}
-    # attempt to create user
     u = crud.create_user(db, username, user_id=payload.user_id)
     return {"user": {
         "id": u.id,
@@ -78,7 +88,6 @@ def api_get_user(user_id: int, db = Depends(get_db)):
     u = crud.get_user(db, user_id)
     if not u:
         raise HTTPException(status_code=404, detail="User not found")
-    # return a simple dict
     return {
         "id": u.id,
         "username": u.username,
@@ -92,7 +101,6 @@ def api_get_user(user_id: int, db = Depends(get_db)):
 @app.get("/tasks", summary="List tasks for a user")
 def api_list_tasks(user_id: int = Query(..., description="user id"), limit: int = 100, offset: int = 0, db = Depends(get_db)):
     tasks = crud.list_tasks_for_user(db, user_id=user_id, limit=limit, offset=offset)
-    # convert to simple dicts
     result = []
     for t in tasks:
         result.append({
@@ -131,15 +139,16 @@ def api_user_stats(user_id: int, db = Depends(get_db)):
     return {"stats": stats}
 
 @app.post("/process-day", summary="Process day, persist logs and update user")
-def api_process_day(user: UserStateIn, tasks: List[TaskIn], db = Depends(get_db)):
+def api_process_day(payload: ProcessDayRequest, db = Depends(get_db)):
+    user = payload.user
+    tasks = payload.tasks
+
     # find or create user
+    orm_user = None
     if user.user_id:
         orm_user = crud.get_user(db, user.user_id)
-    else:
-        orm_user = None
 
     if not orm_user:
-        # create user with provided username or default
         uname = user.username or f"user_{user.user_id or 'anon'}"
         orm_user = crud.create_user(db, uname, user_id=user.user_id)
 
@@ -164,7 +173,6 @@ def api_process_day(user: UserStateIn, tasks: List[TaskIn], db = Depends(get_db)
     task_awards = []
     for t in data_tasks:
         orm_task = crud.ensure_task(db, orm_user.id, t.name, t.type, t.base_xp, t.required_daily)
-        # distribute xp proportional to base_xp
         xp_awarded = int(round(event["day_xp"] * (t.base_xp / total_base)))
         task_awards.append({
             "task_id": orm_task.id,
