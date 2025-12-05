@@ -38,6 +38,19 @@ class TaskIn(BaseModel):
     base_xp: int
     required_daily: bool = False
 
+class TaskCreateIn(BaseModel):
+    user_id: int
+    name: str
+    type: str
+    base_xp: int
+    required_daily: bool = False
+
+class TaskUpdateIn(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    base_xp: Optional[int] = None
+    required_daily: Optional[bool] = None
+
 class UserStateIn(BaseModel):
     user_id: Optional[int] = None
     username: Optional[str] = None
@@ -83,6 +96,19 @@ def api_create_user(payload: UserStateIn, db = Depends(get_db)):
         "current_level": u.current_level
     }}
 
+@app.get("/me", summary="Convenience: get basic user object by query user_id")
+def api_me(user_id: int = Query(..., description="user id"), db = Depends(get_db)):
+    u = crud.get_user(db, user_id)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "id": u.id,
+        "username": u.username,
+        "total_xp": u.total_xp,
+        "current_level": u.current_level,
+        "streak_days": u.streak_days
+    }
+
 @app.get("/users/{user_id}", summary="Get user by id")
 def api_get_user(user_id: int, db = Depends(get_db)):
     u = crud.get_user(db, user_id)
@@ -113,6 +139,54 @@ def api_list_tasks(user_id: int = Query(..., description="user id"), limit: int 
             "created_at": t.created_at.isoformat() if t.created_at else None
         })
     return {"tasks": result, "count": len(result)}
+
+@app.post("/tasks", summary="Create a task for a user")
+def api_create_task(payload: TaskCreateIn, db = Depends(get_db)):
+    # ensure user exists
+    u = crud.get_user(db, payload.user_id)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    t = crud.create_task(db, payload.user_id, payload.name, payload.type, payload.base_xp, payload.required_daily)
+    return {
+        "task": {
+            "id": t.id,
+            "user_id": t.user_id,
+            "name": t.name,
+            "type": t.type,
+            "base_xp": t.base_xp,
+            "required_daily": bool(t.required_daily),
+            "created_at": t.created_at.isoformat() if t.created_at else None
+        }
+    }
+
+@app.put("/tasks/{task_id}", summary="Update a task")
+def api_update_task(task_id: int, payload: TaskUpdateIn, db = Depends(get_db)):
+    t = crud.get_task(db, task_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Task not found")
+    fields = {}
+    if payload.name is not None: fields["name"] = payload.name
+    if payload.type is not None: fields["type"] = payload.type
+    if payload.base_xp is not None: fields["base_xp"] = payload.base_xp
+    if payload.required_daily is not None: fields["required_daily"] = payload.required_daily
+    t = crud.update_task(db, task_id, **fields)
+    return {"task": {
+        "id": t.id,
+        "user_id": t.user_id,
+        "name": t.name,
+        "type": t.type,
+        "base_xp": t.base_xp,
+        "required_daily": bool(t.required_daily),
+        "created_at": t.created_at.isoformat() if t.created_at else None
+    }}
+
+@app.delete("/tasks/{task_id}", summary="Delete a task")
+def api_delete_task(task_id: int, db = Depends(get_db)):
+    t = crud.get_task(db, task_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Task not found")
+    ok = crud.delete_task(db, task_id)
+    return {"deleted": ok, "task_id": task_id}
 
 @app.get("/task-logs", summary="List task logs for a user")
 def api_list_logs(user_id: int = Query(..., description="user id"), limit: int = 100, offset: int = 0, db = Depends(get_db)):
