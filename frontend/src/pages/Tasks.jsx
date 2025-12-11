@@ -1,122 +1,86 @@
 // frontend/src/pages/Tasks.jsx
 import React, { useEffect, useState } from "react";
-import TaskItem from "../components/TaskItem";
+import TaskCard from "../components/TaskCard";
+import TaskModal from "../components/TaskModal";
+import { PlusIcon } from "@heroicons/react/24/solid";
 
-const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const STORAGE_KEY = "streax_tasks_v1";
 
-function EditModal({ open, task, onClose, onSave }) {
-  const [name, setName] = useState("");
-  const [baseXp, setBaseXp] = useState(5);
-  const [required, setRequired] = useState(false);
-
-  useEffect(() => {
-    if (task) {
-      setName(task.name || "");
-      setBaseXp(task.base_xp ?? 5);
-      setRequired(!!task.required_daily);
-    }
-  }, [task]);
-
-  if (!open) return null;
-  return (
-    <div style={{position:"fixed", inset:0, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.3)"}}>
-      <div style={{background:"#fff", padding:18, borderRadius:10, width:420}}>
-        <h3>Edit task</h3>
-        <div style={{marginTop:8}}>
-          <input value={name} onChange={e=>setName(e.target.value)} style={{width:"100%", padding:8, marginBottom:8}}/>
-          <input type="number" value={baseXp} onChange={e=>setBaseXp(Number(e.target.value))} style={{width:"100%", padding:8, marginBottom:8}}/>
-          <label style={{display:"flex", gap:8, alignItems:"center"}}>
-            <input type="checkbox" checked={required} onChange={e=>setRequired(e.target.checked)}/> Required daily
-          </label>
-        </div>
-
-        <div style={{display:"flex", justifyContent:"flex-end", gap:8, marginTop:12}}>
-          <button onClick={onClose} style={{padding:"6px 10px", borderRadius:8}}>Cancel</button>
-          <button onClick={()=>onSave({...task, name, base_xp: baseXp, required_daily: required})} style={{padding:"6px 10px", borderRadius:8, background:"#0ea5a4", color:"#fff"}}>Save</button>
-        </div>
-      </div>
-    </div>
-  );
+function loadTasks() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  // sample seed tasks
+  return [
+    { id: 1, name: "Coding Practice", type: "medium", base_xp: 25, required_daily: true, done: false },
+    { id: 2, name: "Workout", type: "small", base_xp: 10, required_daily: true, done: false },
+    { id: 3, name: "Read docs", type: "small", base_xp: 5, required_daily: false, done: false },
+  ];
+}
+function saveTasks(tasks) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
 }
 
 export default function Tasks() {
-  const [tasks, setTasks] = useState([]);
-  const [userId, setUserId] = useState(() => {
-    const u = localStorage.getItem("streax_user_id");
-    return u ? Number(u) : 1;
-  });
-  const [newTaskName, setNewTaskName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [editing, setEditing] = useState(null);
+  const [tasks, setTasks] = useState(loadTasks);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [query, setQuery] = useState("");
 
-  async function fetchTasks() {
-    try {
-      const res = await fetch(`${API}/tasks?user_id=${userId}&limit=200`);
-      const data = await res.json();
-      setTasks(data.tasks || []);
-    } catch (err) {
-      console.error("fetchTasks error", err);
+  useEffect(() => saveTasks(tasks), [tasks]);
+
+  function handleAdd() {
+    setEditing(null);
+    setModalOpen(true);
+  }
+  function handleSave(task) {
+    if (!task.name || !task.base_xp) return alert("Name and XP are required");
+    if (task.id) {
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, ...task } : t));
+    } else {
+      const next = Math.max(0, ...tasks.map(t=>t.id)) + 1;
+      setTasks(prev => [{ id: next, ...task, done: false }, ...prev]);
     }
+    setModalOpen(false);
   }
-
-  useEffect(()=>{ fetchTasks(); }, [userId]);
-
-  async function createTask() {
-    if (!newTaskName) return;
-    const payload = { user_id: userId, name: newTaskName, type: "small", base_xp: 5, required_daily: false };
-    await fetch(`${API}/tasks`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload) });
-    setNewTaskName("");
-    fetchTasks();
-  }
-
-  async function handleEdit(task) {
+  function handleEdit(task) {
     setEditing(task);
     setModalOpen(true);
   }
-  async function handleDelete(task) {
-    if (!confirm(`Delete task "${task.name}"?`)) return;
-    await fetch(`${API}/tasks/${task.id}`, { method:"DELETE" });
-    fetchTasks();
+  function handleDelete(task) {
+    if (!confirm(`Delete "${task.name}" ?`)) return;
+    setTasks(prev => prev.filter(t => t.id !== task.id));
+  }
+  function toggleDone(task) {
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, done: !t.done } : t));
   }
 
-  async function handleSave(edited) {
-    setModalOpen(false);
-    await fetch(`${API}/tasks/${edited.id}`, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify(edited) });
-    fetchTasks();
-  }
-
-  function changeUser(e) {
-    const v = Number(e.target.value);
-    setUserId(v);
-    localStorage.setItem("streax_user_id", String(v));
-  }
+  const filtered = tasks.filter(t => t.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
-    <div style={{maxWidth:900, margin:"36px auto", padding:18}}>
-      <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12}}>
-        <h1>Tasks</h1>
+    <div className="max-w-6xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-semibold">Tasks</h1>
+          <p className="text-sm text-slate-500">Create, edit, and conquer your tasks.</p>
+        </div>
 
-        <div style={{display:"flex", alignItems:"center", gap:8}}>
-          <label className="small">User:</label>
-          <input type="number" value={userId} onChange={changeUser} style={{width:80, padding:6}} />
+        <div className="flex items-center gap-3">
+          <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search tasks..." className="rounded-md border-slate-200 p-2" />
+          <button onClick={handleAdd} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-md shadow hover:scale-105 transition">
+            <PlusIcon className="w-5 h-5" /> Add Task
+          </button>
         </div>
       </div>
 
-      <div style={{display:"flex", gap:8, marginBottom:12}}>
-        <input value={newTaskName} onChange={e=>setNewTaskName(e.target.value)} placeholder="New task name" style={{flex:1, padding:8}}/>
-        <button onClick={createTask} className="btn">Create</button>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {filtered.map(task => (
+          <TaskCard key={task.id} task={task} onEdit={handleEdit} onDelete={handleDelete} onToggleDone={toggleDone} />
+        ))}
       </div>
 
-      <div>
-        {tasks.length===0 ? <div className="small">No tasks</div> :
-          tasks.map(t => (
-            <TaskItem key={t.id} task={t} onEdit={handleEdit} onDelete={handleDelete} />
-          ))
-        }
-      </div>
-
-      <EditModal open={modalOpen} task={editing} onClose={() => setModalOpen(false)} onSave={handleSave} />
+      <TaskModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} task={editing} />
     </div>
   );
 }
