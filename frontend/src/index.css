@@ -1,10 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ensure selects & option text remain readable in dark mode */
-select, option, input, textarea, button {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* theme variables for quick tuning */
+:root {
+  --bg: #071225;
+  --card: rgba(255,255,255,0.04);
+  --muted: rgba(255,255,255,0.55);
+  --neon-c: #06F6F0;
+  --neon-a: #FF5DA2;
 }
 
+/* base page */
+html, body, #root {
+  height: 100%;
+}
+body {
+  @apply bg-[var(--bg)] text-slate-100 font-sans;
+  background: linear-gradient(180deg,#071225 0%, #020617 100%);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
+/* glass card */
+.card-glass {
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.04);
+  box-shadow: var(--tw-shadow, 0 10px 30px rgba(2,6,23,0.6));
+}
+
+/* neon button variants */
+.btn-neon {
+  background: linear-gradient(90deg, rgba(6,246,240,1), rgba(0,196,180,1));
+  box-shadow: 0 12px 30px rgba(6,246,240,0.08);
+  color: #02121a;
+  font-weight:700;
+}
+.btn-ghost {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.85);
+}
+
+/* XP bar accent */
+.xp-track {
+  background: rgba(255,255,255,0.03);
+  border-radius: 999px;
+  height: 14px;
+}
+.xp-fill {
+  background: linear-gradient(90deg,var(--neon-c), var(--neon-teal, #00C4B4));
+  height: 100%;
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(6,246,240,0.12);
+}
+
+/* ensure form elements readable in dark */
+input, textarea, select, option {
+  background: rgba(255,255,255,0.02);
+  color: #e6f3f2;
+  border: 1px solid rgba(255,255,255,0.04);
+}
+
+/* header emblem */
+.emblem {
+  width:46px; height:46px; border-radius:10px;
+  background: linear-gradient(135deg,#06F6F0,#00C4B4);
+  display:flex; align-items:center; justify-content:center; font-weight:800; color:#02121a;
+  box-shadow: 0 8px 30px rgba(6,246,240,0.12);
+}
+
+/* small helpers */
+.muted { color: rgba(255,255,255,0.58); }
+.small { font-size: 0.85rem; color: rgba(255,255,255,0.7); }
